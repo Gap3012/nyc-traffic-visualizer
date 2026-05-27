@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ROUTANGO — NYC Traffic</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-encoded-polyline@0.0.9/src/encoded-polyline.js"></script>
+<style>
+  :root {
+    --bg: #0a0c0f;
+    --panel: #111418;
+    --border: #1e2530;
+    --text: #c8d4e0;
+    --muted: #4a5568;
+    --accent: #00d4ff;
+    --green: #00ff88;
+    --yellow: #ffd600;
+    --orange: #ff8c00;
+    --red: #ff2d55;
+    --font-mono: 'Share Tech Mono', monospace;
+    --font-display: 'Barlow Condensed', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    z-index: 1000;
+  }
+
+  .logo {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: 2px;
+    color: #fff;
+  }
+
+  .logo span { color: var(--accent); }
+
+  .header-center {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .toggle-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    padding: 5px 12px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+  }
+
+  .toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .toggle-btn.active { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
+  .header-meta {
+    display: flex;
+    gap: 24px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .header-meta .val { color: var(--accent); }
+
+  .status-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    margin-right: 6px;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .main { display: flex; flex: 1; overflow: hidden; }
+  #map { flex: 1; background: #0d1117; }
+
+  .sidebar {
+    width: 300px;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .sidebar-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .legend { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .legend-title { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--text); margin-bottom: 6px; }
+  .legend-bar { width: 32px; height: 4px; border-radius: 2px; }
+
+  .legend-all { padding: 14px 16px; border-bottom: 1px solid var(--border); display: none; }
+  .legend-all.visible { display: block; }
+  .legend-zscore { display: block; }
+  .legend-zscore.hidden { display: none; }
+
+  .info-panel { flex: 1; overflow-y: auto; padding: 14px 16px; }
+  .info-panel::-webkit-scrollbar { width: 4px; }
+  .info-panel::-webkit-scrollbar-track { background: transparent; }
+  .info-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .no-selection { color: var(--muted); font-size: 11px; line-height: 1.8; margin-top: 8px; }
+  .link-detail { display: none; }
+  .link-detail.active { display: block; }
+
+  .link-name { font-family: var(--font-display); font-weight: 600; font-size: 16px; color: #fff; line-height: 1.3; margin-bottom: 4px; }
+  .link-borough { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 16px; }
+
+  .stat-row { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .stat-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  .stat-value { font-size: 15px; font-family: var(--font-display); font-weight: 600; color: #fff; }
+
+  .z-score-bar { margin-top: 16px; }
+  .z-bar-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+  .z-bar-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .z-bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease, background 0.4s ease; }
+  .z-bar-ticks { display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); margin-top: 3px; }
+
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); margin-top: 16px; border: 1px solid var(--border); }
+  .stats-cell { background: var(--bg); padding: 10px 12px; }
+  .stats-cell-label { font-size: 9px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+  .stats-cell-value { font-family: var(--font-display); font-weight: 600; font-size: 18px; color: #fff; }
+  .stats-cell-unit { font-size: 10px; color: var(--muted); }
+
+  .refresh-bar { height: 2px; background: var(--border); overflow: hidden; }
+  .refresh-progress { height: 100%; background: var(--accent); width: 0%; transition: width 1s linear; }
+
+  .footer { padding: 8px 20px; background: var(--panel); border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); flex-shrink: 0; }
+
+  .anomaly-badge { display: inline-block; padding: 2px 8px; border-radius: 2px; font-size: 10px; font-family: var(--font-display); font-weight: 600; letter-spacing: 1px; margin-top: 12px; }
+
+  .mode-badge { display: inline-block; padding: 2px 8px; border-radius: 2px; font-size: 10px; font-family: var(--font-display); font-weight: 600; letter-spacing: 1px; background: var(--accent)20; color: var(--accent); border: 1px solid var(--accent)40; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">ROUTE<span>ANGO</span> <span style="font-weight:300;font-size:14px;color:var(--muted)">// NYC TRAFFIC MONITOR</span></div>
+  <div class="header-center">
+    <button class="toggle-btn" id="btn-live" onclick="setMode('live')">LIVE Z-SCORE</button>
+    <button class="toggle-btn" id="btn-all" onclick="setMode('all')">SHOW ALL LINKS</button>
+  </div>
+  <div class="header-meta">
+    <div><span class="status-dot"></span><span class="val" id="link-count">—</span> LINKS</div>
+    <div>BUCKET <span class="val" id="current-bucket">—</span></div>
+    <div>UPDATED <span class="val" id="last-updated">—</span></div>
+  </div>
+</header>
+
+<div class="refresh-bar"><div class="refresh-progress" id="refresh-progress"></div></div>
+
+<div class="main">
+  <div id="map"></div>
+
+  <div class="sidebar">
+    <div class="sidebar-header">Segment Intel</div>
+
+    <div class="legend legend-zscore" id="legend-zscore">
+      <div class="legend-title">Z-Score (deviation from norm)</div>
+      <div class="legend-item"><div class="legend-bar" style="background:#00ff88"></div> Normal (z &lt; 1)</div>
+      <div class="legend-item"><div class="legend-bar" style="background:#ffd600"></div> Slow (1 ≤ z &lt; 2)</div>
+      <div class="legend-item"><div class="legend-bar" style="background:#ff8c00"></div> Very slow (2 ≤ z &lt; 3)</div>
+      <div class="legend-item"><div class="legend-bar" style="background:#ff2d55"></div> Anomalous (z ≥ 3)</div>
+      <div class="legend-item"><div class="legend-bar" style="background:#4a5568"></div> No data</div>
+    </div>
+
+    <div class="legend legend-all" id="legend-all">
+      <div class="legend-title">All-time mean speed</div>
+      <div class="legend-item"><div class="legend-bar" style="background:#00ff88"></div> Fast (&gt; 45 mph)</div>
+      <div class="legend-item"><div class="legend-bar" style="background:#ffd600"></div> Moderate (25–45 mph)</div>
+      <div class="legend-item"><div class="legend-bar" style="background:#ff8c00"></div> Slow (10–25 mph)</div>
+      <div class="legend-item"><div class="legend-bar" style="background:#ff2d55"></div> Very slow (&lt; 10 mph)</div>
+      <div class="legend-item"><div class="legend-bar" style="background:#4a5568"></div> No data</div>
+    </div>
+
+    <div class="info-panel">
+      <div class="no-selection" id="no-selection">
+        Click a segment to inspect its traffic statistics.
+      </div>
+      <div class="link-detail" id="link-detail">
+        <div class="link-name" id="detail-name"></div>
+        <div class="link-borough" id="detail-borough"></div>
+        <div id="detail-mode-badge"></div>
+
+        <div class="stats-grid">
+          <div class="stats-cell">
+            <div class="stats-cell-label">Live Speed</div>
+            <div class="stats-cell-value" id="detail-live">—</div>
+            <div class="stats-cell-unit">mph</div>
+          </div>
+          <div class="stats-cell">
+            <div class="stats-cell-label">Mean Speed</div>
+            <div class="stats-cell-value" id="detail-mean">—</div>
+            <div class="stats-cell-unit">mph</div>
+          </div>
+          <div class="stats-cell">
+            <div class="stats-cell-label">Std Dev</div>
+            <div class="stats-cell-value" id="detail-std">—</div>
+            <div class="stats-cell-unit">mph</div>
+          </div>
+          <div class="stats-cell">
+            <div class="stats-cell-label">Samples</div>
+            <div class="stats-cell-value" id="detail-count">—</div>
+            <div class="stats-cell-unit">obs</div>
+          </div>
+        </div>
+
+        <div class="z-score-bar" id="z-score-section">
+          <div class="z-bar-label">Congestion Z-Score</div>
+          <div class="z-bar-track">
+            <div class="z-bar-fill" id="z-bar-fill"></div>
+          </div>
+          <div class="z-bar-ticks"><span>0</span><span>1</span><span>2</span><span>3+</span></div>
+        </div>
+
+        <div id="anomaly-badge-container"></div>
+
+        <div class="stat-row" style="margin-top:16px">
+          <span class="stat-label">Last reading</span>
+          <span class="stat-value" style="font-size:11px;font-family:var(--font-mono)" id="detail-timestamp">—</span>
+        </div>
+        <div class="stat-row" id="bucket-row">
+          <span class="stat-label">Time bucket</span>
+          <span class="stat-value" style="font-size:11px" id="detail-bucket">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <span>ROUTANGO V2 // TRAFFIC INTELLIGENCE LAYER</span>
+  <span id="footer-stats">—</span>
+</div>
+
+<script>
+const REFRESH_INTERVAL = 60000;
+const DAY_NAMES = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
+
+const map = L.map('map', { zoomControl: false }).setView([40.73, -73.95], 11);
+L.control.zoom({ position: 'topleft' }).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 19
+}).addTo(map);
+
+let polylines = {};
+let selectedId = null;
+let currentMode = 'live'; // 'live' or 'all'
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('btn-live').classList.toggle('active', mode === 'live');
+  document.getElementById('btn-all').classList.toggle('active', mode === 'all');
+  document.getElementById('legend-zscore').style.display = mode === 'live' ? 'block' : 'none';
+  document.getElementById('legend-all').style.display = mode === 'all' ? 'block' : 'none';
+  document.getElementById('z-score-section').style.display = mode === 'live' ? 'block' : 'none';
+  document.getElementById('bucket-row').style.display = mode === 'live' ? 'flex' : 'none';
+  // Clear selection
+  selectedId = null;
+  document.getElementById('no-selection').style.display = 'block';
+  document.getElementById('link-detail').classList.remove('active');
+  fetchAndRender();
+}
+
+function zColor(z) {
+  if (z === null) return '#4a5568';
+  if (z < 1)  return '#00ff88';
+  if (z < 2)  return '#ffd600';
+  if (z < 3)  return '#ff8c00';
+  return '#ff2d55';
+}
+
+function speedColor(speed) {
+  if (speed === null) return '#4a5568';
+  if (speed > 45) return '#00ff88';
+  if (speed > 25) return '#ffd600';
+  if (speed > 10) return '#ff8c00';
+  return '#ff2d55';
+}
+
+function zWeight(z) {
+  if (z === null) return 2;
+  if (z < 1) return 3;
+  if (z < 2) return 4;
+  return 5;
+}
+
+function bucketToTime(bucket) {
+  if (bucket === null) return '—';
+  const h = Math.floor(bucket / 2);
+  const m = (bucket % 2) * 30;
+  const end_h = m === 30 ? h + 1 : h;
+  const end_m = m === 30 ? 0 : 30;
+  const pad = n => String(n).padStart(2,'0');
+  return pad(h) + ':' + pad(m) + '–' + pad(end_h) + ':' + pad(end_m);
+}
+
+function showDetail(f) {
+  document.getElementById('no-selection').style.display = 'none';
+  document.getElementById('link-detail').classList.add('active');
+
+  document.getElementById('detail-name').textContent = f.link_name;
+  document.getElementById('detail-borough').textContent = f.borough + ' // LINK ' + f.link_id;
+  document.getElementById('detail-live').textContent = f.live_speed !== null ? f.live_speed : '—';
+  document.getElementById('detail-mean').textContent = f.mean_speed !== null ? f.mean_speed : '—';
+  document.getElementById('detail-std').textContent = f.stddev_speed !== null ? f.stddev_speed : '—';
+  document.getElementById('detail-count').textContent = f.count;
+
+  if (f.bucket !== null) {
+    document.getElementById('detail-bucket').textContent = bucketToTime(f.bucket) + ' ' + DAY_NAMES[f.day_of_week];
+  }
+
+  const ts = f.data_as_of ? f.data_as_of.replace('T',' ').substring(0,16) : '—';
+  document.getElementById('detail-timestamp').textContent = ts;
+
+  // Mode badge
+  const modeBadge = document.getElementById('detail-mode-badge');
+  if (currentMode === 'all') {
+    modeBadge.innerHTML = '<div class="mode-badge">ALL-TIME AVERAGE</div>';
+  } else {
+    modeBadge.innerHTML = '';
+  }
+
+  // Z-bar
+  const z = f.z_score;
+  const fill = document.getElementById('z-bar-fill');
+  const pct = z !== null ? Math.min(z / 3, 1) * 100 : 0;
+  fill.style.width = pct + '%';
+  fill.style.background = zColor(z);
+
+  // Anomaly badge
+  const badge = document.getElementById('anomaly-badge-container');
+  if (z !== null && z >= 2) {
+    const label = z >= 3 ? 'ANOMALOUS' : 'CONGESTED';
+    const color = z >= 3 ? '#ff2d55' : '#ff8c00';
+    badge.innerHTML = `<div class="anomaly-badge" style="background:${color}20;color:${color};border:1px solid ${color}40">${label} // z=${z}</div>`;
+  } else {
+    badge.innerHTML = '';
+  }
+}
+
+function renderPolylines(data) {
+  Object.values(polylines).forEach(p => map.removeLayer(p));
+  polylines = {};
+
+  let anomalies = 0;
+  const isAllMode = data.mode === 'all_links';
+
+  data.features.forEach(f => {
+    if (!f.encoded_poly) return;
+
+    let latlngs;
+    try { latlngs = L.EncodedPolyline.decode(f.encoded_poly); } catch(e) { return; }
+    if (!latlngs || latlngs.length < 2) return;
+
+    const color = isAllMode ? speedColor(f.mean_speed) : zColor(f.z_score);
+    const weight = isAllMode ? 3 : zWeight(f.z_score);
+    if (!isAllMode && f.z_score !== null && f.z_score >= 2) anomalies++;
+
+    const pl = L.polyline(latlngs, { color, weight, opacity: 0.85 }).addTo(map);
+
+    const tooltipSpeed = isAllMode
+      ? (f.mean_speed !== null ? f.mean_speed + ' mph avg' : 'no data')
+      : (f.live_speed !== null ? f.live_speed + ' mph live' : 'no live data');
+
+    pl.on('click', () => {
+      selectedId = f.link_id;
+      showDetail(f);
+      Object.entries(polylines).forEach(([id, p]) => {
+        p.setStyle({ opacity: id === f.link_id ? 1 : 0.4 });
+      });
+    });
+
+    pl.on('mouseover', () => {
+      if (selectedId !== f.link_id) pl.setStyle({ opacity: 1, weight: weight + 1 });
+      pl.bindTooltip(`<b>${f.link_name}</b><br>${tooltipSpeed}`, {
+        sticky: true, className: 'traffic-tooltip'
+      }).openTooltip();
+    });
+
+    pl.on('mouseout', () => {
+      if (selectedId !== f.link_id) pl.setStyle({ opacity: 0.85, weight });
+      pl.closeTooltip();
+    });
+
+    polylines[f.link_id] = pl;
+    if (selectedId === f.link_id) showDetail(f);
+  });
+
+  document.getElementById('link-count').textContent = data.features.length;
+  document.getElementById('current-bucket').textContent =
+    isAllMode ? 'ALL TIME' : bucketToTime(data.bucket) + ' ' + DAY_NAMES[data.day_of_week];
+  document.getElementById('last-updated').textContent =
+    data.generated_at ? data.generated_at.substring(11,16) : '—';
+  document.getElementById('footer-stats').textContent = isAllMode
+    ? `${data.features.length} LINKS // ALL-TIME MEAN SPEED`
+    : `${data.features.length} LINKS ACTIVE // ${anomalies} ANOMALIES DETECTED`;
+}
+
+function fetchAndRender() {
+  const endpoint = currentMode === 'all' ? '/api/links' : '/api/stats';
+  fetch(endpoint)
+    .then(r => r.json())
+    .then(data => renderPolylines(data))
+    .catch(e => console.error('Fetch error:', e));
+}
+
+function startProgressBar() {
+  const bar = document.getElementById('refresh-progress');
+  bar.style.transition = 'none';
+  bar.style.width = '0%';
+  setTimeout(() => {
+    bar.style.transition = `width ${REFRESH_INTERVAL/1000}s linear`;
+    bar.style.width = '100%';
+  }, 50);
+}
+
+// Init
+setMode('live');
+startProgressBar();
+setInterval(() => { fetchAndRender(); startProgressBar(); }, REFRESH_INTERVAL);
+</script>
+
+<style>
+.traffic-tooltip {
+  background: #111418 !important;
+  border: 1px solid #1e2530 !important;
+  color: #c8d4e0 !important;
+  font-family: 'Share Tech Mono', monospace !important;
+  font-size: 11px !important;
+  border-radius: 2px !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
+}
+.leaflet-tooltip-top:before { border-top-color: #1e2530 !important; }
+</style>
+</body>
+</html>
