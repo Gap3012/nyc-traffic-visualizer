@@ -6,6 +6,7 @@ import os
 import sqlite3
 import time
 import urllib.request
+import signal as _signal
 from datetime import datetime, timedelta
 
 # --- Config ---
@@ -175,6 +176,15 @@ def poll(conn, token):
 
         page += 1
 
+    if total_inserted > 0:
+	try:
+	    with open("/tmp/stats.pid") as f:
+                stats_pid = int(f.read().strip())
+            os.kill(stats_pid, _signal.SIGUSR1)
+            log.info("Signaled stats service (PID %d)", stats_pid)
+        except Exception as e:
+            log.warning("Could not signal stats service: %s", e)
+    
     log.info("Poll complete — %d total rows inserted", total_inserted)
 
 
