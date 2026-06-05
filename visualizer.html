@@ -8,7 +8,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;600;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/polyline-encoded@0.0.9/Polyline.encoded.js"></script>
+<script>
+function decodePolyline(str){var p=[],lat=0,lng=0,i=0;while(i<str.length){var b,s=0,r=0;do{b=str.charCodeAt(i++)-63;r|=(b&0x1f)<<s;s+=5;}while(b>=0x20);lat+=(r&1)?~(r>>1):(r>>1);s=0;r=0;do{b=str.charCodeAt(i++)-63;r|=(b&0x1f)<<s;s+=5;}while(b>=0x20);lng+=(r&1)?~(r>>1):(r>>1);p.push([lat/1e5,lng/1e5]);}return p;}
+</script>
 <style>
   :root {
     --bg: #0a0c0f;
@@ -394,7 +396,7 @@ function renderPolylines(data) {
     if (!f.encoded_poly) return;
 
     let latlngs;
-    try { latlngs = L.EncodedPolyline.decode(f.encoded_poly); } catch(e) { return; }
+    try { latlngs = decodePolyline(f.encoded_poly); } catch(e) { return; }
     if (!latlngs || latlngs.length < 2) return;
 
     const color = isAllMode ? speedColor(f.mean_speed) : zColor(f.z_score);
